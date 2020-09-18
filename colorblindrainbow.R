@@ -73,33 +73,9 @@ pew$transpol<-pew$Q80_G
 pew$transpol<-recode(pew$transpol,"-1=NA")
 pew$transpol<-5-pew$transpol
 
-#participation
-pew$orgmem<-pew$Q83_A
-pew$orgmem<-recode(pew$orgmem,"-1=NA")
-pew$orgmem<-recode(pew$orgmem,"2=1")
-pew$orgmem<-recode(pew$orgmem,"3=0")
-pew$rally<-pew$Q83_D
-pew$rally<-recode(pew$rally,"-1=NA")
-pew$rally<-recode(pew$rally,"2=1")
-pew$rally<-recode(pew$rally,"3=0")
-pew$pride<-pew$Q83_E
-pew$pride<-recode(pew$pride,"-1=NA")
-pew$pride<-recode(pew$pride,"2=1")
-pew$pride<-recode(pew$pride,"3=0")
-pew$donate<-pew$Q83_F
-pew$donate<-recode(pew$donate,"-1=NA")
-pew$donate<-recode(pew$donate,"2=1")
-pew$donate<-recode(pew$donate,"3=0")
-pew$vote<-pew$OFTVOTE
-pew$vote<-recode(pew$vote,"-1=NA")
-pew$vote<-5-pew$vote
-
 #party
 pew$rep<-pew$PARTY
 pew$rep<-ifelse(pew$PARTY == 1,1,ifelse(pew$PARTY == 3 & pew$PARTYLN == 1,1,0 ))
-
-#ideology
-pew$IDEO<-recode(pew$IDEO, "-1=NA")
 
 #controls
 pew$INCOME<-recode(pew$INCOME,"-1=NA")
@@ -126,8 +102,6 @@ pew$linkedtrans<-recode(pew$linkedtrans,"-1=NA")
 pew$linkedtrans<-5-pew$linkedtrans
 pew$linktot <- rowSums(pew[,c("linkedlesbians", "linkedgays","linkedbi","linkedtrans")], na.rm=TRUE)
 
-
-
 #general social net (aka big gov)
 socialnetmodel<-glm(smallgov~white+other+hisp+rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
 summary(socialnetmodel)
@@ -150,8 +124,6 @@ snp<-ggplot(preds, aes(type,predicted)) +
   theme(axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0))) +
   theme(axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 0, l = 0))) +
   scale_x_discrete(limits=c("NW Dem","W Dem","W Rep", "NW Rep"))
-  
-
 
 #discrimination
 dismodel<-polr(as.factor(bdis)~white+other+hisp+rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,Hess=TRUE,model=TRUE)
@@ -168,6 +140,51 @@ coeftest(dishispmodel)
 
 dishispmodel1<-polr(as.factor(hdis)~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,Hess=TRUE,model=TRUE)
 coeftest(dishispmodel1)
+
+white<-rep(0:1,2)
+rep<-rep(0:1,each=2)
+pewnew<-data.frame(white=white,
+                   rep=rep,INCOME=mean(pew$INCOME,na.rm=TRUE),PPEDUCAT=mean(pew$PPEDUCAT,na.rm=TRUE),ppagecat=mean(pew$ppagecat,na.rm=TRUE),SEX=mean(pew$SEX,na.rm=TRUE))
+pewnew1<- cbind(pewnew,predict(dismodel1, pewnew, type = "probs"))
+pewnewdat <- melt(pewnew1, id.vars = c("white", "rep","INCOME","PPEDUCAT","ppagecat","SEX"),
+                  variable.name = "Identity", value.name="Probability")
+pewnewdat$identity<-ifelse(pewnewdat$white == 1 & pewnewdat$rep == 1, "W Rep",ifelse(pewnewdat$white == 1 & pewnewdat$rep == 0 , "W Dem",ifelse(pewnewdat$white == 0 & pewnewdat$rep == 1, "NW Rep",ifelse(pewnewdat$white == 0 & pewnewdat$rep == 0, "NW Dem", NA))))
+
+p1<-ggplot(pewnewdat, aes(x = identity, y = value)) +
+  geom_point(aes(colour = factor(variable),size=2)) + theme_bw()+ labs(title="Discrimination by Identity",x="Identity",y="Predicted Probabilities") + theme(plot.title = element_text(hjust = 0.5))+ theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold")) + theme(plot.title = element_text(size = 15, face = "bold")) + scale_colour_discrete(name  ="Support", breaks=c("1", "2", "3", "4"),labels=c("Lot", "Some", "Little", "None"))
+
+lotsdata<-subset(pewnewdat,select = c("variable","value","identity"),subset = (variable == 1 | variable == 2))
+plots<-ggplot(lotsdata, aes(x = identity, y = value)) +
+  geom_point(aes(shape = factor(variable)),size= 4) + 
+  theme_bw()+ 
+  labs(title="African Americans",x="Identity",y="Predicted Probabilities") + 
+  theme(plot.title = element_text(hjust = 0.5))+ 
+  theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold")) + 
+  theme(plot.title = element_text(size = 15, face = "bold")) + 
+  scale_shape_discrete(name  ="Discrimination", breaks=c("1", "2", "3", "4"),labels=c("Lot", "Some", "Little", "None"))+ 
+  theme(legend.position="none") +
+  theme(text = element_text(size=24, family="CM Roman")) +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0))) +
+  theme(axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 0, l = 0))) +
+
+
+exp(coef(dismodel1))
+(ci<-confint(dismodel1))
+exp(cbind(OR = coef(dismodel1), ci))
+
+hisnew1<- cbind(pewnew,predict(dishispmodel1, pewnew, type = "probs"))
+hisnewdat <- melt(hisnew1, id.vars = c("white", "rep","INCOME","PPEDUCAT","ppagecat","SEX"),
+                  variable.name = "Identity", value.name="Probability")
+hisnewdat$identity<-ifelse(hisnewdat$white == 1 & hisnewdat$rep == 1, "W Rep",ifelse(hisnewdat$white == 1 & hisnewdat$rep == 0 , "W Dem",ifelse(hisnewdat$white == 0 & hisnewdat$rep == 1, "NW Rep",ifelse(hisnewdat$white == 0 & hisnewdat$rep == 0, "NW Dem", NA))))
+
+hisp1<-ggplot(hisnewdat, aes(x = identity, y = value)) +
+  geom_point(aes(colour = factor(variable),size=2)) + theme_bw()+ labs(title="Discrimination by Identity",x="Identity",y="Predicted Probabilities") + theme(plot.title = element_text(hjust = 0.5))+ theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold")) + theme(plot.title = element_text(size = 15, face = "bold")) + scale_colour_discrete(name  ="Support", breaks=c("1", "2", "3", "4"),labels=c("Lot", "Some", "Little", "None"))
+
+hislotsdata<-subset(hisnewdat,select = c("variable","value","identity"),subset = (variable == 1 | variable == 2))
+hisplots<-ggplot(hislotsdata, aes(x = identity, y = value)) +
+  geom_point(aes(shape = factor(variable)),size=4) + theme_bw()+ labs(title="Hispanic Americans",x="Identity",y="Predicted Probabilities") + theme(plot.title = element_text(hjust = 0.5))+ theme(axis.text=element_text(size=12),axis.title=element_text(size=14,face="bold")) + theme(plot.title = element_text(size = 15, face = "bold")) + scale_shape_discrete(name  ="Discrimination", breaks=c("1", "2", "3", "4"),labels=c("Lot", "Some", "Little", "None")) + theme(legend.position=c(.8,.65))+ theme(legend.background = element_rect(fill="white",size=0.5, linetype="solid",colour ="black"))
+
+grid.arrange(plots,hisplots,ncol=2)
 
 #gay policies
 job2<-polr(as.factor(jobpol)~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,Hess=TRUE,model=TRUE)
@@ -193,25 +210,35 @@ transpolsmod<-polr(as.factor(transpol)~white+rep+white*rep+INCOME+PPEDUCAT+ppage
 summary(transpolsmod)
 coeftest(transpolsmod)
 
-#participation
-orgmod<-glm(orgmem~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(orgmod)
+mar<- cbind(pewnew,predict(mar2, pewnew, type = "probs"))
+mardat <- melt(mar, id.vars = c("white", "rep","INCOME","PPEDUCAT","ppagecat","SEX"),
+                  variable.name = "Identity", value.name="Probability")
+mardat$identity<-ifelse(mardat$white == 1 & mardat$rep == 1, "W Rep",ifelse(mardat$white == 1 & mardat$rep == 0 , "W Dem",ifelse(mardat$white == 0 & mardat$rep == 1, "NW Rep",ifelse(mardat$white == 0 & mardat$rep == 0, "NW Dem", NA))))
+submar<-subset(mardat,select = c("variable","value","identity"),subset = (variable == 4))
+submar$variable<-"Marriage"
 
-rallymod<-glm(rally~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(rallymod)
+hiv<-cbind(pewnew,predict(hivpolsmod,pewnew,type="probs"))
+hivdat<- melt(hiv,id.vars = c("white", "rep","INCOME","PPEDUCAT","ppagecat","SEX"),
+              variable.name = "Identity", value.name="Probability")
+hivdat$identity<-ifelse(hivdat$white == 1 & hivdat$rep == 1, "W Rep",ifelse(hivdat$white == 1 & hivdat$rep == 0 , "W Dem",ifelse(hivdat$white == 0 & hivdat$rep == 1, "NW Rep",ifelse(hivdat$white == 0 & hivdat$rep == 0, "NW Dem", NA))))
+subhiv<-subset(hivdat,select=c("variable","value","identity"),subset = (variable == 4))
+subhiv$variable<-"HIV"
+subtotal<-rbind(submar,subhiv)
 
-pridemod<-glm(pride~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(pridemod)
+polplot<-ggplot(subtotal, aes(x = variable, y = value,group=identity)) +
+  geom_line(aes(linetype = factor(identity)),size=1) + 
+  theme_bw()+
+  theme(text = element_text(size=24, family="CM Roman")) +
+  labs(y="Predicted Probabilities") + 
+  theme(axis.text.x=element_text(size=14),axis.text.y=element_text(size=12),axis.title=element_text(size=15)) + 
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0))) +
+  theme(axis.title.x = element_blank()) +
+  theme(legend.position="none") + 
+  scale_x_discrete(expand=c(0.14,0.14)) +
+  geom_dl(aes(label = identity),method=list("last.qp", dl.trans(x=x+.2) ,cex = 0.8))
 
-donatemod<-glm(donate~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(donatemod)
-
-votemod<-polr(as.factor(vote)~white+rep+linktot+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,Hess=TRUE,model=TRUE)
-coeftest(votemod)
-
-#white money
-whitemoney<-lm(INCOME~white,data=pew)
-summary(whitemoney)
+  
+  polplot
 
 #immigrant model
 immmod1<-glm(immi~white+rep+white*rep+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
@@ -230,9 +257,3 @@ imp<-ggplot(preds, aes(type,predicted)) +
   theme(axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0))) +
   theme(axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 0, l = 0))) +
   scale_x_discrete(limits=c("NW Dem","W Dem","W Rep", "NW Rep"))
-
-#party
-repmod<-glm(rep~white+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(repmod)
-indmod<-glm(ind~white+INCOME+PPEDUCAT+ppagecat+SEX,data=pew,family=binomial)
-summary(indmod)
